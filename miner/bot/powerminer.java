@@ -32,6 +32,7 @@ public class powerminer extends PollingScript<ClientContext> implements PaintLis
     int x = 0;
     boolean powermine;
     boolean banking = false;
+    String currentState;
 
 
     @Override
@@ -131,6 +132,7 @@ public class powerminer extends PollingScript<ClientContext> implements PaintLis
 
     private void moved() {//moves back to start tile, and gets location of all tiles next to player at start
         if(start){
+            currentState = "START";
             System.out.print("Start");
             startLvl = ctx.skills.realLevel(14);
             startXp = ctx.skills.experience(14);
@@ -190,6 +192,7 @@ public class powerminer extends PollingScript<ClientContext> implements PaintLis
             start = false;
         }
         else if (!ctx.players.local().inMotion()) {//if not moving go back to start tile
+            currentState = "RETURNING";
             System.out.print("MOVED");
             ctx.movement.step(myTile);// add this back in when fix it
         }
@@ -322,6 +325,9 @@ public class powerminer extends PollingScript<ClientContext> implements PaintLis
 
     private void bank(){
         banking = true;
+        if (ctx.depositBox.opened()){
+            ctx.depositBox.close();
+        }
         if(ctx.bank.inViewport() && !ctx.bank.opened()){
             ctx.bank.open();
         }
@@ -330,28 +336,27 @@ public class powerminer extends PollingScript<ClientContext> implements PaintLis
             ctx.movement.step(ctx.bank.nearest());
         }
         if(ctx.bank.opened()){
-            ctx.bank.depositInventory();
+            if (ctx.inventory.isFull()){
+                ctx.bank.depositInventory();
+            }
             try {
-                Thread.sleep(rand.nextInt(50) + 350);
+                Thread.sleep(rand.nextInt(50) + 150);
             } catch (InterruptedException ex) {
                 Thread.currentThread().interrupt();
             }
             ctx.bank.withdraw(pickID, 1);
             try {
-                Thread.sleep(rand.nextInt(50) + 100);
+                Thread.sleep(rand.nextInt(70) + 350);
             } catch (InterruptedException ex) {
                 Thread.currentThread().interrupt();
             }
-            ctx.bank.close();
-            try {
-                Thread.sleep(rand.nextInt(50) + 200);
-            } catch (InterruptedException ex) {
-                Thread.currentThread().interrupt();
+            if (ctx.inventory.select().isEmpty() && pickaxe){
+                System.out.print("RETRY PICK");
+                ctx.bank.withdraw(pickID, 1);
             }
-            if (pickaxe && ctx.inventory.isEmpty()){
-                ctx.bank.open();
-            }
-            else{
+            else if ((!ctx.inventory.select().isEmpty() && pickaxe) || !pickaxe){
+                System.out.print("BANK FINISHED");
+                ctx.bank.close();
                 banking = false;
             }
         }
@@ -362,18 +367,22 @@ public class powerminer extends PollingScript<ClientContext> implements PaintLis
     private State state() {
         if (y == 1){
             y = 0;
+            currentState = "ANTI-BAN";
             return State.ANTIBAN;
         }
         if ((!ctx.players.local().tile().equals(myTile) || start) && !banking){//if not at starting tile, move back
             return State.MOVED;
         }
         if ((ctx.inventory.isFull() || dropping) && powermine){//if inv full, drop
+            currentState = "DROPPING";
             return State.DROP;
         }
         if ((ctx.inventory.isFull() && !powermine) || banking){//if inv full, bank
+            currentState = "BANKING";
             return State.BANK;
         }
         if (oreAvailable){//if ore near, mine
+            currentState = "MINING";
             return State.MINE;
         }
         return State.IDLE;
@@ -408,6 +417,7 @@ public class powerminer extends PollingScript<ClientContext> implements PaintLis
         draw.drawString("XP gained: "+xpGain, 290, 405);
         draw.drawString("Level: " + ctx.skills.realLevel(14)+" (+"+(ctx.skills.realLevel(14) - startLvl)+")"+"  TTL: "+ttl+"min ("+xpLeft/1000+"k)", 290, 420);
         draw.drawString("Ore mined: " + oreMined + " (" + oreHour + "/hr)", 290, 435);
+        draw.drawString("Status: " + currentState, 290, 450);
         draw.drawString("Version 0.1", 290, 465);
         draw.drawString("Option: " + choice, 365, 465);
     }
