@@ -1,12 +1,13 @@
 package bot;
 
+import com.sun.deploy.util.ArrayUtil;
 import org.powerbot.script.PaintListener;
 import org.powerbot.script.Tile;
 import org.powerbot.script.rt4.ClientContext;
 import org.powerbot.script.PollingScript;
 import org.powerbot.script.Script;
 import org.powerbot.script.rt4.Game;
-
+import org.powerbot.script.rt4.Item;
 import javax.swing.*;
 import java.awt.*;
 import java.util.Random;
@@ -18,17 +19,17 @@ public class powerminer extends PollingScript<ClientContext> implements PaintLis
     String choice;
     int iron1 = 7455;
     int iron2 = 7488;
-    int pickID;
+    Tile[] rockTiles = {new Tile(0,0),new Tile(0,0),new Tile(0,0),new Tile(0,0)};
+    int[] rocksID = {0,0,0,0};
+    Item pickItem;
     boolean pickaxe = false;
-    int ab, myXp, notMine;
+    int antiBanCounter, myXp, notMine;
     boolean oreAvailable;
     boolean dropping = false;
     boolean start = true;
     Random rand = new Random();
-    Tile myTile;
-    Tile tileLeft, tileRight, tileUp, tileDown;
-    int tileLeftID, tileRightID, tileUpID, tileDownID;
-    int y, startXp, startLvl, oreMined;
+    Tile myTile, tileLeft, tileRight, tileUp, tileDown;
+    int y, startXp, startLvl, oreMined, z, pickCheck;
     int x = 0;
     boolean powermine;
     boolean banking = false;
@@ -37,7 +38,7 @@ public class powerminer extends PollingScript<ClientContext> implements PaintLis
 
     @Override
     public void poll() {
-        ab++;
+        antiBanCounter++;
         if (ctx.chat.chatting()){//if level up chat comes up, dismiss it
             ctx.input.send(" ");
         }
@@ -49,8 +50,8 @@ public class powerminer extends PollingScript<ClientContext> implements PaintLis
             oreAvailable = false;//no ore available
         }
 
-        if(ab > 80 && !dropping){//every 10* the script goes to poll()
-            ab = 0;
+        if(antiBanCounter > 80 && !dropping){//every 80* the script goes to poll()
+            antiBanCounter = 0;
             y = rand.nextInt(10);//generates random num 1-10, if its one has chance to do an anti-ban action
         }
 
@@ -149,52 +150,78 @@ public class powerminer extends PollingScript<ClientContext> implements PaintLis
             else {
                 ctx.controller.stop();
             }
-            if (ctx.inventory.itemAt(0).name().contains("pickaxe")){
-                pickID = ctx.inventory.itemAt(0).id();
-                pickaxe = true;
+            pickCheck = 0;
+            if(!ctx.game.tab(Game.Tab.INVENTORY)){
+                ctx.input.click(ctx.widgets.component(548, 51).screenPoint(), true);
+            }
+            while (pickCheck < 28){
+                if (ctx.inventory.itemAt(pickCheck).name().contains("pickaxe")){
+                    pickItem = ctx.inventory.itemAt(pickCheck);
+                    System.out.print("have pick");
+                    pickaxe = true;
+                    pickCheck++;
+                }
+                else{
+                    pickCheck++;
+                }
             }
             myTile = ctx.players.local().tile();
             tileLeft = new Tile(myTile.x() - 1, myTile.y());
             tileRight = new Tile(myTile.x() + 1, myTile.y());
             tileUp = new Tile(myTile.x(), myTile.y() + 1);
             tileDown = new Tile(myTile.x(), myTile.y() - 1);
+            z = 0;
             if (!ctx.objects.select().id(iron1).at(tileLeft).isEmpty()){//if iron1 at left tile set the ID
-                tileLeftID = iron1;
+                rockTiles[z] = tileLeft;
+                rocksID[z] = iron1;
+                z++;
             }
             else if (!ctx.objects.select().id(iron2).at(tileLeft).isEmpty()) {//if iron2 at left set ID
-                tileLeftID = iron2;
+                rockTiles[z] = tileLeft;
+                rocksID[z] = iron2;
+                z++;
             }
-            else{ tileLeftID = 1; }//if nothing at left set ID as 1
 
             if (!ctx.objects.select().id(iron1).at(tileRight).isEmpty()){
-                tileRightID = iron1;
+                rockTiles[z] = tileRight;
+                rocksID[z] = iron1;
+                z++;
             }
             else if (!ctx.objects.select().id(iron2).at(tileRight).isEmpty()){
-                tileRightID = iron2;
+                rockTiles[z] = tileRight;
+                rocksID[z] = iron2;
+                z++;
             }
-            else{ tileRightID = 1; }
 
             if (!ctx.objects.select().id(iron1).at(tileUp).isEmpty()){
-                tileUpID = iron1;
+                rockTiles[z] = tileUp;
+                rocksID[z] = iron1;
+                z++;
             }
             else if (!ctx.objects.select().id(iron2).at(tileUp).isEmpty()) {
-                tileUpID = iron2;
+                rockTiles[z] = tileUp;
+                rocksID[z] = iron2;
+                z++;
             }
-            else{ tileUpID = 1; }
 
             if (!ctx.objects.select().id(iron1).at(tileDown).isEmpty()){
-                tileDownID = iron1;
+                rockTiles[z] = tileDown;
+                rocksID[z] = iron1;
+                z++;
             }
             else if (!ctx.objects.select().id(iron2).at(tileDown).isEmpty()){
-                tileDownID = iron2;
+                rockTiles[z] = tileDown;
+                rocksID[z] = iron2;
+                z++;
             }
-            else{ tileDownID = 1; }
+            z = 0;
+            System.out.print(rockTiles.length + 1);
             start = false;
         }
         else if (!ctx.players.local().inMotion()) {//if not moving go back to start tile
             currentState = "RETURNING";
             System.out.print("MOVED");
-            ctx.movement.step(myTile);// add this back in when fix it
+            ctx.movement.step(myTile);
         }
     }
 
@@ -226,18 +253,21 @@ public class powerminer extends PollingScript<ClientContext> implements PaintLis
     private void mine() {
         if (pickaxe && ctx.inventory.isEmpty()){
             banking = true;
+            return;
         }
-        notMine = 0;
+        if (z >= rockTiles.length){
+            z = 0;
+        }
+        if (rockTiles[z].equals(new Tile(0,0))){
+            z++;
+            return;
+        }
+        System.out.print("\nCurrent rock:"+z+" Tile:"+rockTiles[z]);
         myXp = ctx.skills.experience(14);//set xp before mined rock
-        if (!ctx.objects.select().id(tileLeftID).at(tileLeft).isEmpty()) {//if ore at left, mine it
-            ctx.objects.select().id(tileLeftID).at(tileLeft).poll().interact("Mine");
-            if (rand.nextInt(5) == 1){
-                ctx.input.move(ctx.players.local().centerPoint().x+rand.nextInt(80)-40, ctx.players.local().centerPoint().y+rand.nextInt(80)-40);
-            }
-            else if (rand.nextInt(3) == 2){
-                ctx.input.move(ctx.input.getLocation().x+rand.nextInt(40)-20, ctx.input.getLocation().y+rand.nextInt(40)-20);
-            }
-            while (ctx.skills.experience(14) == myXp && !ctx.objects.select().id(tileLeftID).at(tileLeft).isEmpty()) {
+        if (!ctx.objects.select().id(rocksID[z]).at(rockTiles[z]).isEmpty()){//if no ore at current rock that its checking
+            notMine = 0;//breaks loop if not mining
+            ctx.objects.select().id(rocksID[z]).at(rockTiles[z]).poll().interact("Mine");//mines rock
+            while (ctx.skills.experience(14) == myXp && !ctx.objects.select().id(rocksID[z]).at(rockTiles[z]).isEmpty()) {
                 try {
                     Thread.sleep(rand.nextInt(20) + 10);
                 } catch (InterruptedException ex) {
@@ -251,74 +281,12 @@ public class powerminer extends PollingScript<ClientContext> implements PaintLis
                     break;
                 }
             }
-        } else if (!ctx.objects.select().id(tileUpID).at(tileUp).isEmpty()) {//if ore at up, mine it
-            ctx.objects.select().id(tileUpID).at(tileUp).poll().interact("Mine");
-            if (rand.nextInt(5) == 1){
-                ctx.input.move(ctx.players.local().centerPoint().x+rand.nextInt(80)-40, ctx.players.local().centerPoint().y+rand.nextInt(80)-40);
-            }
-            else if (rand.nextInt(7) == 2){
-                ctx.input.move(ctx.input.getLocation().x+rand.nextInt(40)-20, ctx.input.getLocation().y+rand.nextInt(40)-20);
-            }
-            while (ctx.skills.experience(14) == myXp && !ctx.objects.select().id(tileUpID).at(tileUp).isEmpty()) {
-                try {
-                    Thread.sleep(rand.nextInt(20) + 10);
-                } catch (InterruptedException ex) {
-                    Thread.currentThread().interrupt();
-                }
-                notMine++;
-                if (notMine > 25 && ctx.players.local().animation() == -1){
-                    break;
-                }
-                if (ctx.players.local().inMotion() || !myTile.equals(ctx.players.local().tile())) {
-                    break;
-                }
-            }
-        } else if (!ctx.objects.select().id(tileRightID).at(tileRight).isEmpty()) {//if ore at left, mine it
-            ctx.objects.select().id(tileRightID).at(tileRight).poll().interact("Mine");
-            if (rand.nextInt(5) == 1){
-                ctx.input.move(ctx.players.local().centerPoint().x+rand.nextInt(80)-40, ctx.players.local().centerPoint().y+rand.nextInt(80)-40);
-            }
-            else if (rand.nextInt(7) == 2){
-                ctx.input.move(ctx.input.getLocation().x+rand.nextInt(40)-20, ctx.input.getLocation().y+rand.nextInt(40)-20);
-            }
-            while (ctx.skills.experience(14) == myXp && !ctx.objects.select().id(tileRightID).at(tileRight).isEmpty()) {
-                try {
-                    Thread.sleep(rand.nextInt(20) + 10);
-                } catch (InterruptedException ex) {
-                    Thread.currentThread().interrupt();
-                }
-                notMine++;
-                if (notMine > 25 && ctx.players.local().animation() == -1){
-                    break;
-                }
-                if (ctx.players.local().inMotion() || !myTile.equals(ctx.players.local().tile())) {
-                    break;
-                }
-            }
-        } else if (!ctx.objects.select().id(tileDownID).at(tileDown).isEmpty()) {//if ore at down, mine it
-            ctx.objects.select().id(tileDownID).at(tileDown).poll().interact("Mine");
-            if (rand.nextInt(5) == 1){
-                ctx.input.move(ctx.players.local().centerPoint().x+rand.nextInt(80)-40, ctx.players.local().centerPoint().y+rand.nextInt(80)-40);
-            }
-            else if (rand.nextInt(7) == 2){
-                ctx.input.move(ctx.input.getLocation().x+rand.nextInt(40)-20, ctx.input.getLocation().y+rand.nextInt(40)-20);
-            }
-            while (ctx.skills.experience(14) == myXp && !ctx.objects.select().id(tileDownID).at(tileDown).isEmpty()) {
-                try {
-                    Thread.sleep(rand.nextInt(20) + 10);
-                } catch (InterruptedException ex) {
-                    Thread.currentThread().interrupt();
-                }
-                notMine++;
-                if (notMine > 25 && ctx.players.local().animation() == -1){
-                    break;
-                }
-                if (ctx.players.local().inMotion() || !myTile.equals(ctx.players.local().tile())) {
-                    break;
-                }
-            }
+        }
+        else{
+            z++;
         }
         if (ctx.skills.experience(14) != myXp){
+            z++;
             oreMined++;
         }
     }
@@ -344,15 +312,18 @@ public class powerminer extends PollingScript<ClientContext> implements PaintLis
             } catch (InterruptedException ex) {
                 Thread.currentThread().interrupt();
             }
-            ctx.bank.withdraw(pickID, 1);
+            ctx.bank.withdraw(pickItem.id(), 1);
             try {
                 Thread.sleep(rand.nextInt(70) + 350);
             } catch (InterruptedException ex) {
                 Thread.currentThread().interrupt();
             }
             if (ctx.inventory.select().isEmpty() && pickaxe){
+                ctx.widgets.component(12, 11).component(0).interact("View all items");
+                ctx.bank.currentTab(0);
                 System.out.print("RETRY PICK");
-                ctx.bank.withdraw(pickID, 1);
+                System.out.print(pickItem.name());
+                ctx.bank.withdraw(pickItem, 1);
             }
             else if ((!ctx.inventory.select().isEmpty() && pickaxe) || !pickaxe){
                 System.out.print("BANK FINISHED");
@@ -362,7 +333,7 @@ public class powerminer extends PollingScript<ClientContext> implements PaintLis
         }
     }
 
-    private void idle(){}
+    private void idle(){z = 0;}
 
     private State state() {
         if (y == 1){
