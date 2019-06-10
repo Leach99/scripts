@@ -6,6 +6,8 @@ import org.powerbot.script.Script;
 import org.powerbot.script.rt4.ClientContext;
 import org.powerbot.script.rt4.Npc;
 import org.powerbot.script.rt4.TilePath;
+
+import javax.swing.*;
 import java.util.Random;
 
 
@@ -18,8 +20,9 @@ public class runner extends PollingScript<ClientContext>{
     int idleCounter = 0;
     final static int NAT_RUINS = 32492;
     boolean trading = false;
-    String crafter = "UPS Leach";
+    String crafter;
     Random rand = new Random();
+    boolean start = true;
 
 
 
@@ -295,6 +298,10 @@ public class runner extends PollingScript<ClientContext>{
     }
 
     private State state(){
+        if (start){
+            crafter = "" + JOptionPane.showInputDialog(null, "RSN of Runecrafter:", "Runner", JTextField.CENTER);
+            start = false;
+        }
         if (trading || (ctx.players.local().tile().distanceTo(ctx.objects.select().id(34756).poll()) < 15 && ctx.inventory.isFull())){//if can see portal
             return State.TRADE;
         }
